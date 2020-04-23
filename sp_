@@ -1,0 +1,71 @@
+ALTER PROC [dbo].[DYNAMICTBL_INSERTBULKDATA_MULTIDB_v3]
+AS
+BEGIN
+
+	DECLARE @NUM INT = 1 -- iteration counter; or (+1) file number
+	DECLARE @OUTPUTTBL NVARCHAR(40) -- output table name
+	DECLARE @PART INT = 0 -- table part indicator
+	DECLARE @DB NVARCHAR(5) -- database variable
+	DECLARE @DBINDEX INT = 0 -- index of the database
+	DECLARE @CREATEDB NVARCHAR(MAX) -- implementation of a new database
+	DECLARE @CREATETBL BIT = 0 -- condition on table status
+	DECLARE @SQLTBL NVARCHAR(MAX)
+
+
+	WHILE @NUM < 40
+		BEGIN
+			--- finding the right csv file
+			DECLARE @FILENAME NVARCHAR(MAX) = (SELECT 'D:\__MSA_RYERSON_UNIVERSITY\MRP\Data - DA\CENSUS_PROFILE_2016\censusprofile2016_part' + CAST(@NUM AS VARCHAR(2)) + '.txt')
+
+			-- uunder what condition create and move on to a new database
+			IF (@NUM - 1) % 11.0 = 0.0
+				BEGIN
+				SET @DBINDEX += 1
+				SET @DB = (SELECT 'MRP' + CAST(@DBINDEX AS VARCHAR(2)))
+				
+				SELECT @CREATEDB = 'CREATE DATABASE ' + @DB 
+				EXEC (@CREATEDB)
+
+				SET @CREATETBL = 1
+				SET @PART += 1
+				--DECLARE @SQLTBL NVARCHAR(MAX)
+				SET @OUTPUTTBL = (SELECT 'CENSUS_PROFILE_P' + CAST(@PART AS VARCHAR(2)))
+
+				-- implement creation of a new table
+				IF @CREATETBL = 1
+					BEGIN
+						SELECT @SQLTBL = 'CREATE TABLE ' + @DB + '.dbo.' + @OUTPUTTBL + 
+						'(CENSUS_YEAR			NVARCHAR(10)			NULL,'+
+						'GEO_CODE				NVARCHAR(40)			NULL,'+
+						'GEO_LEVEL				NVARCHAR(10)			NULL,'+
+						'GEO_NAME				NVARCHAR(MAX)			NULL,'+
+						'GNR					NVARCHAR(MAX)			NULL,'+
+						'GRN_LF					NVARCHAR(10)			NULL,'+
+						'DATA_QUALITY_FLAG		NVARCHAR(20)			NULL,'+
+						'ALT_GEO_CODE			NVARCHAR(40)			NULL,'+
+						'DIM_2247				NVARCHAR(MAX)			NULL,'+
+						'MEMBER_ID_DA_2247		NVARCHAR(MAX)			NULL,'+
+						'NOTE_2247				NVARCHAR(MAX)			NULL,'+
+						'DIM_TOTAL				NVARCHAR(40)			NULL,'+
+						'DIM_MALE				NVARCHAR(40)			NULL,'+
+						'DIM_FEMALE				NVARCHAR(40)			NULL) '
+
+						EXEC (@SQLTBL)
+						SET @CREATETBL = 0
+					END
+				END
+
+			-- Bulk Inserting data into SQL tables
+			DECLARE @SQL NVARCHAR(MAX) = N'BULK INSERT ' + @DB + '.dbo.' + QUOTENAME(@OUTPUTTBL) +
+				' FROM ''' + @FILENAME + 
+				''' WITH (FORMATFILE=''C:\Temp\formatSQL.fmt'')'; 
+			EXEC (@SQL)
+
+			-- print where the file ended up
+			PRINT @FILENAME + N' IS STORED ON ' + @DB + N' IN TABLE ' + @OUTPUTTBL
+
+			SET @NUM += 1 -- incrementing counter
+
+		END
+
+END
